@@ -1,0 +1,144 @@
+# vLLM TPU Inference - LeaderWorkerSet (Multi-Host)
+#
+# Use LWS when the model is too large for a single VM's TPU chips
+# and you need Ray-based distributed inference across multiple VMs.
+# For most models (up to ~70B), use tpu-inference-deployment.yaml instead.
+#
+# Prerequisites:
+#   - LWS CRD: kubectl apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/latest/download/manifests.yaml
+#   - HF token: kubectl create secret generic hf-token --from-literal=token=hf_xxx
+#
+# Usage:
+#   kubectl apply -f tpu-inference-lws.yaml
+#   kubectl port-forward svc/vllm-lws-svc 8000:8000
+
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: vllm-multihost
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 4  # 4 VMs total (1 leader + 3 workers) = 16 TPU chips
+    restartPolicy: RecreateGroupOnPodRestart
+    leaderTemplate:
+      metadata:
+        labels:
+          role: leader
+      spec:
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        nodeSelector:
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-topology: 4x4x1
+        containers:
+          - name: vllm-tpu
+            image: vllm/vllm-tpu:nightly-20260428-99e0d15-fd74c90
+            imagePullPolicy: Always
+            env:
+              - name: HUGGING_FACE_HUB_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: hf-token
+                    key: token
+                    optional: true
+              - name: RAY_CLUSTER_SIZE
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.annotations['leaderworkerset.sigs.k8s.io/size']
+            command:
+              - bash
+              - -c
+              - |
+                # Leader starts Ray head and vLLM server
+                ray start --head --port=6379
+                sleep 10  # Wait for workers to join
+
+                python3 -m vllm.entrypoints.openai.api_server \
+                  --host=0.0.0.0 \
+                  --port=8000 \
+                  --model=meta-llama/Llama-3.1-405B-Instruct-FP8 \
+                  --tensor-parallel-size=16 \
+                  --max-model-len=8192 \
+                  --max-num-batched-tokens=16384 \
+                  --kv-cache-dtype=fp8 \
+                  --async-scheduling \
+                  --gpu-memory-utilization=0.90
+            ports:
+              - containerPort: 8000
+                name: http
+              - containerPort: 6379
+                name: ray
+              - containerPort: 8471
+              - containerPort: 8431
+            resources:
+              limits:
+                google.com/tpu: 4
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+        tolerations:
+          - operator: "Exists"
+            key: google.com/tpu
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+    workerTemplate:
+      metadata:
+        labels:
+          role: worker
+      spec:
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        nodeSelector:
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-topology: 4x4x1
+        containers:
+          - name: vllm-tpu
+            image: vllm/vllm-tpu:nightly-20260428-99e0d15-fd74c90
+            imagePullPolicy: Always
+            env:
+              - name: HUGGING_FACE_HUB_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: hf-token
+                    key: token
+                    optional: true
+            command:
+              - bash
+              - -c
+              - |
+                # Workers join the Ray cluster on the leader
+                LEADER_ADDR=$(echo $LWS_LEADER_ADDRESS)
+                ray start --address="${LEADER_ADDR}:6379" --block
+            ports:
+              - containerPort: 8471
+              - containerPort: 8431
+            resources:
+              limits:
+                google.com/tpu: 4
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+        tolerations:
+          - operator: "Exists"
+            key: google.com/tpu
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-lws-svc
+spec:
+  type: ClusterIP
+  selector:
+    leaderworkerset.sigs.k8s.io/name: vllm-multihost
+    leaderworkerset.sigs.k8s.io/worker-index: "0"
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
