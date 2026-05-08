@@ -35,7 +35,27 @@ spec:
                 onExitCodes:
                   containerName: jax-tpu
                   operator: NotIn
-                  values: [0, 42]
+                  values:
+                    - 0
+                    - 42
+                    - 127
+                    - 128
+                    - 129
+                    - 130
+                    - 131
+                    - 132
+                    - 133
+                    - 134
+                    - 135
+                    - 136
+                    - 137
+                    - 138
+                    - 139
+                    - 140
+                    - 141
+                    - 142
+                    - 143
+                    - 255
           template:
             spec:
               restartPolicy: Never
@@ -49,8 +69,9 @@ spec:
                   image: sanjeevrg/maxtext-tpu-posttraining:stable
                   imagePullPolicy: Always
                   ports:
-                    - containerPort: 8471
-                    - containerPort: 8080
+                    - containerPort: 8471  # TPU inter-chip communication
+                    - containerPort: 8080  # HTTP health/monitoring
+                    - containerPort: 8431  # gRPC
                   securityContext:
                     privileged: true
                   env:
@@ -74,8 +95,8 @@ spec:
 
                       export LIBTPU_INIT_ARGS="--xla_enable_async_all_gather=true"
 
-                      python3 -m MaxText.trainers.post_train.sft.train_sft \
-                        MaxText/configs/base.yml \
+                      python3 -m maxtext.trainers.post_train.sft.train_sft \
+                        src/maxtext/configs/base.yml \
                         model_name=llama3.1-70b \
                         per_device_batch_size=2.0 \
                         max_target_length=8192 \

@@ -6,6 +6,10 @@
 # Usage:
 #   kubectl apply -f tpu-inference-lws.yaml
 #   kubectl port-forward svc/maxtext-vllm-svc 8000:8000
+#
+# Prerequisites:
+#   - LWS CRD installed: kubectl apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/latest/download/manifests.yaml
+#   - (Optional) HuggingFace token secret: kubectl create secret generic hf-token --from-literal=token=hf_xxx
 
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
@@ -53,6 +57,8 @@ spec:
             ports:
               - containerPort: 8000
                 name: http
+              - containerPort: 8471
+              - containerPort: 8431
             resources:
               limits:
                 google.com/tpu: 4
