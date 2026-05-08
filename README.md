@@ -10,6 +10,8 @@ Public Docker images for [MaxText](https://github.com/AI-hypercomputer/maxtext) 
 | `sanjeevrg/maxtext-tpu-pretraining:nightly` | TPU pre-training with nightly JAX |
 | `sanjeevrg/maxtext-tpu-posttraining:stable` | TPU post-training (SFT/GRPO) with stable JAX |
 | `sanjeevrg/maxtext-tpu-posttraining:nightly` | TPU post-training with nightly JAX |
+| `sanjeevrg/maxtext-gpu-pretraining:stable` | GPU pre-training with stable JAX |
+| `sanjeevrg/maxtext-gpu-pretraining:nightly` | GPU pre-training with nightly JAX |
 
 ## Pull
 
