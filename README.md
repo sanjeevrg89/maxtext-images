@@ -6,19 +6,19 @@ Public Docker images for [MaxText](https://github.com/AI-hypercomputer/maxtext) 
 
 | Image | Description |
 |-------|-------------|
-| `ghcr.io/sanjeevrg89/maxtext-tpu-pretraining:stable` | TPU pre-training with stable JAX |
-| `ghcr.io/sanjeevrg89/maxtext-tpu-pretraining:nightly` | TPU pre-training with nightly JAX |
-| `ghcr.io/sanjeevrg89/maxtext-tpu-posttraining:stable` | TPU post-training (SFT/GRPO) with stable JAX |
-| `ghcr.io/sanjeevrg89/maxtext-tpu-posttraining:nightly` | TPU post-training with nightly JAX |
+| `sanjeevrg89/maxtext-tpu-pretraining:stable` | TPU pre-training with stable JAX |
+| `sanjeevrg89/maxtext-tpu-pretraining:nightly` | TPU pre-training with nightly JAX |
+| `sanjeevrg89/maxtext-tpu-posttraining:stable` | TPU post-training (SFT/GRPO) with stable JAX |
+| `sanjeevrg89/maxtext-tpu-posttraining:nightly` | TPU post-training with nightly JAX |
 
 ## Pull
 
 ```bash
 # TPU pre-training (stable JAX)
-docker pull ghcr.io/sanjeevrg89/maxtext-tpu-pretraining:stable
+docker pull sanjeevrg89/maxtext-tpu-pretraining:stable
 
 # TPU post-training (stable JAX)
-docker pull ghcr.io/sanjeevrg89/maxtext-tpu-posttraining:stable
+docker pull sanjeevrg89/maxtext-tpu-posttraining:stable
 ```
 
 Each image is also tagged with date (`stable-2026-05-07`) and upstream commit SHA (`stable-abc1234`).
@@ -27,12 +27,12 @@ Each image is also tagged with date (`stable-2026-05-07`) and upstream commit SH
 
 ```bash
 # Using crane
-crane copy ghcr.io/sanjeevrg89/maxtext-tpu-pretraining:stable \
+crane copy sanjeevrg89/maxtext-tpu-pretraining:stable \
   your-registry.example.com/maxtext-tpu-pretraining:stable
 
 # Using skopeo
 skopeo copy \
-  docker://ghcr.io/sanjeevrg89/maxtext-tpu-pretraining:stable \
+  docker://sanjeevrg89/maxtext-tpu-pretraining:stable \
   docker://your-registry.example.com/maxtext-tpu-pretraining:stable
 ```
 
