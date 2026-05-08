@@ -61,13 +61,19 @@ jobs:
         if: matrix.device == 'gpu'
         working-directory: /tmp/maxtext
         run: |
-          # Upstream bug: GPU Dockerfile configures NVIDIA apt repos for Ubuntu 22.04
+          # Upstream bug: GPU Dockerfile configures NVIDIA devtools repo for Ubuntu 22.04
           # but the base image ghcr.io/nvidia/jax:base has moved to Ubuntu 24.04.
-          # This causes "Unable to locate package libcusparse-12-6".
-          # See: https://github.com/AI-hypercomputer/maxtext/blob/main/src/dependencies/dockerfiles/maxtext_gpu_dependencies.Dockerfile#L11
-          sed -i 's/ubuntu2204/ubuntu2404/g' \
-            src/dependencies/dockerfiles/${{ matrix.dockerfile }}
-          echo "Patched NVIDIA repo from ubuntu2204 → ubuntu2404"
+          # The ubuntu2204 devtools repo has libcusparse-12-6 (CUDA 12.6) but apt
+          # can't use it on a 24.04 base, and the ubuntu2404 repo doesn't carry it.
+          #
+          # Fix: Remove the devtools repo and skip the libcusparse install entirely.
+          # The base NVIDIA JAX image already ships with CUDA and libcusparse.
+          # The upstream "upgrade" was for an older base image and is no longer needed.
+          DF="src/dependencies/dockerfiles/${{ matrix.dockerfile }}"
+          sed -i '/devtools.*ubuntu.*\.list/d' "$DF"
+          sed -i 's|apt-get update && apt-get install -y libcusparse-12-6|echo "Skipping libcusparse install - using version from base CUDA image"|' "$DF"
+          echo "--- Patched GPU Dockerfile (removed devtools repo + libcusparse-12-6) ---"
+          grep -n "devtools\|libcusparse\|cusparse" "$DF" || echo "All references removed"
 
       - name: Set image metadata
         id: meta
