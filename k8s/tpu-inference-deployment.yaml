@@ -1,0 +1,96 @@
+# vLLM TPU Inference - Deployment (Single-Host, Scaled Replicas)
+#
+# This is the standard inference pattern from tpu-recipes/inference/ironwood.
+# Each pod gets a small TPU slice. Scale with replicas + data parallelism.
+# Use this for most models up to ~120B parameters.
+#
+# For models too large for a single VM (e.g., 405B), use tpu-inference-lws.yaml instead.
+#
+# Prerequisites:
+#   - HF token: kubectl create secret generic hf-token --from-literal=token=hf_xxx
+#   - (Optional) Model on GCS for faster loading
+#
+# Usage:
+#   kubectl apply -f tpu-inference-deployment.yaml
+#   kubectl port-forward svc/vllm-inference-svc 8000:8000
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-inference
+spec:
+  replicas: 1  # Scale up for throughput (e.g., 50 for production)
+  selector:
+    matchLabels:
+      app: vllm-inference
+  template:
+    metadata:
+      labels:
+        app: vllm-inference
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        cloud.google.com/gke-tpu-accelerator: tpu7x
+        cloud.google.com/gke-tpu-topology: 2x2x1  # 4 chips per pod
+      containers:
+        - name: vllm-tpu
+          image: vllm/vllm-tpu:nightly-20260428-99e0d15-fd74c90
+          imagePullPolicy: Always
+          command:
+            - python3
+            - -m
+            - vllm.entrypoints.openai.api_server
+          args:
+            - --host=0.0.0.0
+            - --port=8000
+            - --model=meta-llama/Llama-3.1-70B-Instruct
+            - --tensor-parallel-size=4
+            - --max-model-len=8192
+            - --max-num-batched-tokens=16384
+            - --kv-cache-dtype=fp8
+            - --async-scheduling
+            - --gpu-memory-utilization=0.86
+          env:
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+                  optional: true
+          ports:
+            - containerPort: 8000
+              name: http
+          resources:
+            limits:
+              google.com/tpu: 4
+            requests:
+              google.com/tpu: 4
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+      tolerations:
+        - operator: "Exists"
+          key: google.com/tpu
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-inference-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-inference
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

@@ -35,15 +35,23 @@ docker pull sanjeevrg/maxtext-gpu-pretraining:stable
 
 Each image is also tagged by date (`stable-2026-05-08`) and upstream commit SHA (`stable-abc1234`) for pinning.
 
-## Kubernetes Manifests (Ironwood 4x4x8)
+## Kubernetes Manifests (Ironwood)
 
 Ready-to-use manifests in [`k8s/`](k8s/):
 
+### Training (JobSet)
+
+| Manifest | Topology | Use Case |
+|----------|----------|----------|
+| `tpu-pretraining-jobset.yaml` | 4x4x8 (128 chips, 32 VMs) | Pre-training |
+| `tpu-posttraining-jobset.yaml` | 4x4x8 (128 chips, 32 VMs) | Post-training (SFT) |
+
+### Inference (vLLM)
+
 | Manifest | Type | Topology | Use Case |
 |----------|------|----------|----------|
-| `tpu-pretraining-jobset.yaml` | JobSet | 4x4x8 (128 chips, 32 VMs) | Pre-training |
-| `tpu-posttraining-jobset.yaml` | JobSet | 4x4x8 (128 chips, 32 VMs) | Post-training (SFT) |
-| `tpu-inference-lws.yaml` | LeaderWorkerSet | 2x4x1 (8 chips) | Inference (vLLM) |
+| `tpu-inference-deployment.yaml` | Deployment | 2x2x1 (4 chips/pod) | Single-host, scalable replicas (up to ~120B models) |
+| `tpu-inference-lws.yaml` | LeaderWorkerSet | 4x4x1 (16 chips, 4 VMs) | Multi-host with Ray (405B+ models) |
 
 ### Deploy Pre-Training
 
