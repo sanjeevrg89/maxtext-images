@@ -31,7 +31,7 @@ on:
         type: boolean
 
 env:
-  DOCKERHUB_REPO: sanjeevrg89
+  DOCKERHUB_REPO: sanjeevrg
   MAXTEXT_REF: ${{ github.event.inputs.maxtext_ref || 'main' }}
   MODE: ${{ github.event.inputs.mode || 'stable' }}
 
