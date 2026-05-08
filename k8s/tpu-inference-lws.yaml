@@ -2,10 +2,12 @@ apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
   name: vllm-multihost
+  annotations:
+    alpha.jobset.sigs.k8s.io/exclusive-topology: cloud.google.com/gke-nodepool
 spec:
   replicas: 1
   leaderWorkerTemplate:
-    size: 4
+    size: 2
     restartPolicy: RecreateGroupOnPodRestart
     leaderTemplate:
       metadata:
@@ -16,7 +18,7 @@ spec:
         dnsPolicy: ClusterFirstWithHostNet
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu7x
-          cloud.google.com/gke-tpu-topology: 4x4x1
+          cloud.google.com/gke-tpu-topology: 2x2x2
         containers:
           - name: vllm-tpu
             image: vllm/vllm-tpu:nightly-20260428-99e0d15-fd74c90
@@ -43,7 +45,7 @@ spec:
                   --host=0.0.0.0 \
                   --port=8000 \
                   --model=${MODEL_NAME} \
-                  --tensor-parallel-size=16 \
+                  --tensor-parallel-size=8 \
                   --max-model-len=8192 \
                   --max-num-batched-tokens=16384 \
                   --kv-cache-dtype=fp8 \
@@ -78,7 +80,7 @@ spec:
         dnsPolicy: ClusterFirstWithHostNet
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu7x
-          cloud.google.com/gke-tpu-topology: 4x4x1
+          cloud.google.com/gke-tpu-topology: 2x2x2
         containers:
           - name: vllm-tpu
             image: vllm/vllm-tpu:nightly-20260428-99e0d15-fd74c90
