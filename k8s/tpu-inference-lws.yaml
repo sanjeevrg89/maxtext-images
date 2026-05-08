@@ -1,17 +1,3 @@
-# vLLM TPU Inference - LeaderWorkerSet (Multi-Host)
-#
-# Use LWS when the model is too large for a single VM's TPU chips
-# and you need Ray-based distributed inference across multiple VMs.
-# For most models (up to ~70B), use tpu-inference-deployment.yaml instead.
-#
-# Prerequisites:
-#   - LWS CRD: kubectl apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/latest/download/manifests.yaml
-#   - HF token: kubectl create secret generic hf-token --from-literal=token=hf_xxx
-#
-# Usage:
-#   kubectl apply -f tpu-inference-lws.yaml
-#   kubectl port-forward svc/vllm-lws-svc 8000:8000
-
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
@@ -19,7 +5,7 @@ metadata:
 spec:
   replicas: 1
   leaderWorkerTemplate:
-    size: 4  # 4 VMs total (1 leader + 3 workers) = 16 TPU chips
+    size: 4
     restartPolicy: RecreateGroupOnPodRestart
     leaderTemplate:
       metadata:
@@ -36,10 +22,10 @@ spec:
             image: vllm/vllm-tpu:nightly-20260428-99e0d15-fd74c90
             imagePullPolicy: Always
             env:
-              - name: HUGGING_FACE_HUB_TOKEN
+              - name: MODEL_ACCESS_TOKEN
                 valueFrom:
                   secretKeyRef:
-                    name: hf-token
+                    name: model-token
                     key: token
                     optional: true
               - name: RAY_CLUSTER_SIZE
@@ -50,14 +36,13 @@ spec:
               - bash
               - -c
               - |
-                # Leader starts Ray head and vLLM server
                 ray start --head --port=6379
-                sleep 10  # Wait for workers to join
+                sleep 10
 
                 python3 -m vllm.entrypoints.openai.api_server \
                   --host=0.0.0.0 \
                   --port=8000 \
-                  --model=meta-llama/Llama-3.1-405B-Instruct-FP8 \
+                  --model=${MODEL_NAME} \
                   --tensor-parallel-size=16 \
                   --max-model-len=8192 \
                   --max-num-batched-tokens=16384 \
@@ -99,17 +84,16 @@ spec:
             image: vllm/vllm-tpu:nightly-20260428-99e0d15-fd74c90
             imagePullPolicy: Always
             env:
-              - name: HUGGING_FACE_HUB_TOKEN
+              - name: MODEL_ACCESS_TOKEN
                 valueFrom:
                   secretKeyRef:
-                    name: hf-token
+                    name: model-token
                     key: token
                     optional: true
             command:
               - bash
               - -c
               - |
-                # Workers join the Ray cluster on the leader
                 LEADER_ADDR=$(echo $LWS_LEADER_ADDRESS)
                 ray start --address="${LEADER_ADDR}:6379" --block
             ports:

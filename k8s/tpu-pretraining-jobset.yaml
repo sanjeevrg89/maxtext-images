@@ -1,13 +1,3 @@
-# MaxText TPU Pre-Training JobSet - Ironwood 4x4x8 (128 chips, 32 VMs)
-#
-# Usage:
-#   export WORKLOAD_NAME=maxtext-pretrain-$(date +%s)
-#   export BASE_OUTPUT_DIR=gs://your-bucket/output
-#   envsubst < tpu-pretraining-jobset.yaml | kubectl apply -f -
-#
-# Customize model_name, per_device_batch_size, and parallelism args
-# for your specific model and topology.
-
 apiVersion: jobset.x-k8s.io/v1alpha2
 kind: JobSet
 metadata:
@@ -24,10 +14,10 @@ spec:
     maxRestarts: 0
   replicatedJobs:
     - name: slice-job
-      replicas: 1  # Number of slices. Set >1 for multi-slice training.
+      replicas: 1
       template:
         spec:
-          parallelism: 32   # 128 chips / 4 chips-per-VM = 32 VMs
+          parallelism: 32
           completions: 32
           backoffLimit: 0
           podFailurePolicy:
@@ -71,9 +61,9 @@ spec:
                   image: sanjeevrg/maxtext-tpu-pretraining:stable
                   imagePullPolicy: Always
                   ports:
-                    - containerPort: 8471  # TPU inter-chip communication
-                    - containerPort: 8080  # HTTP health/monitoring
-                    - containerPort: 8431  # gRPC
+                    - containerPort: 8471
+                    - containerPort: 8080
+                    - containerPort: 8431
                   securityContext:
                     privileged: true
                   env:
@@ -93,16 +83,13 @@ spec:
                     - bash
                     - -c
                     - |
-                      echo "Start: $(date)"
-
-                      # XLA flags for Ironwood - tune as needed
                       export LIBTPU_INIT_ARGS="--xla_enable_async_all_gather=true"
 
                       python3 -m maxtext.trainers.pre_train.train \
                         src/maxtext/configs/base.yml \
-                        model_name=llama3.1-70b \
-                        per_device_batch_size=4.0 \
-                        max_target_length=8192 \
+                        model_name=${MODEL_NAME} \
+                        per_device_batch_size=${PER_DEVICE_BATCH_SIZE} \
+                        max_target_length=${MAX_TARGET_LENGTH} \
                         ici_fsdp_parallelism=-1 \
                         ici_fsdp_transpose_parallelism=1 \
                         ici_pipeline_parallelism=1 \
@@ -114,13 +101,9 @@ spec:
                         use_iota_embed=True \
                         opt_type=adamw \
                         dataset_type=synthetic \
-                        steps=30 \
+                        steps=${STEPS} \
                         base_output_directory=${BASE_OUTPUT_DIR} \
                         run_name=${WORKLOAD_NAME}
-
-                      EXIT_CODE=$?
-                      echo "End: $(date), exit=$EXIT_CODE"
-                      exit $EXIT_CODE
                   resources:
                     limits:
                       google.com/tpu: 4

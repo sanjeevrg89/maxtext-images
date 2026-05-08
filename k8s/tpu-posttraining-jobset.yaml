@@ -1,11 +1,3 @@
-# MaxText TPU Post-Training (SFT) JobSet - Ironwood 4x4x8 (128 chips, 32 VMs)
-#
-# Usage:
-#   export WORKLOAD_NAME=maxtext-sft-$(date +%s)
-#   export BASE_OUTPUT_DIR=gs://your-bucket/output
-#   export LOAD_PARAMETERS_PATH=gs://your-bucket/pretrained-checkpoint
-#   envsubst < tpu-posttraining-jobset.yaml | kubectl apply -f -
-
 apiVersion: jobset.x-k8s.io/v1alpha2
 kind: JobSet
 metadata:
@@ -25,7 +17,7 @@ spec:
       replicas: 1
       template:
         spec:
-          parallelism: 32   # 128 chips / 4 chips-per-VM = 32 VMs
+          parallelism: 32
           completions: 32
           backoffLimit: 0
           podFailurePolicy:
@@ -69,9 +61,9 @@ spec:
                   image: sanjeevrg/maxtext-tpu-posttraining:stable
                   imagePullPolicy: Always
                   ports:
-                    - containerPort: 8471  # TPU inter-chip communication
-                    - containerPort: 8080  # HTTP health/monitoring
-                    - containerPort: 8431  # gRPC
+                    - containerPort: 8471
+                    - containerPort: 8080
+                    - containerPort: 8431
                   securityContext:
                     privileged: true
                   env:
@@ -91,15 +83,13 @@ spec:
                     - bash
                     - -c
                     - |
-                      echo "Start: $(date)"
-
                       export LIBTPU_INIT_ARGS="--xla_enable_async_all_gather=true"
 
                       python3 -m maxtext.trainers.post_train.sft.train_sft \
                         src/maxtext/configs/base.yml \
-                        model_name=llama3.1-70b \
-                        per_device_batch_size=2.0 \
-                        max_target_length=8192 \
+                        model_name=${MODEL_NAME} \
+                        per_device_batch_size=${PER_DEVICE_BATCH_SIZE} \
+                        max_target_length=${MAX_TARGET_LENGTH} \
                         ici_fsdp_parallelism=-1 \
                         ici_fsdp_transpose_parallelism=1 \
                         ici_pipeline_parallelism=1 \
@@ -111,13 +101,9 @@ spec:
                         opt_type=adamw \
                         load_parameters_path=${LOAD_PARAMETERS_PATH} \
                         dataset_type=synthetic \
-                        steps=100 \
+                        steps=${STEPS} \
                         base_output_directory=${BASE_OUTPUT_DIR} \
                         run_name=${WORKLOAD_NAME}
-
-                      EXIT_CODE=$?
-                      echo "End: $(date), exit=$EXIT_CODE"
-                      exit $EXIT_CODE
                   resources:
                     limits:
                       google.com/tpu: 4
