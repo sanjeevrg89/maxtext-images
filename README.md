@@ -1,48 +1,58 @@
-# MaxText TPU Docker Images
+# MaxText Docker Images
 
-Public Docker images for [MaxText](https://github.com/AI-hypercomputer/maxtext) TPU training workloads.
+Public Docker images for [MaxText](https://github.com/AI-hypercomputer/maxtext) training workloads on TPU and GPU.
 
 ## Available Images
 
+### TPU
+
 | Image | Description |
 |-------|-------------|
-| `sanjeevrg/maxtext-tpu-pretraining:stable` | TPU pre-training with stable JAX |
-| `sanjeevrg/maxtext-tpu-pretraining:nightly` | TPU pre-training with nightly JAX |
-| `sanjeevrg/maxtext-tpu-posttraining:stable` | TPU post-training (SFT/GRPO) with stable JAX |
-| `sanjeevrg/maxtext-tpu-posttraining:nightly` | TPU post-training with nightly JAX |
-| `sanjeevrg/maxtext-gpu-pretraining:stable` | GPU pre-training with stable JAX |
-| `sanjeevrg/maxtext-gpu-pretraining:nightly` | GPU pre-training with nightly JAX |
+| `sanjeevrg/maxtext-tpu-pretraining:stable` | Pre-training with stable JAX |
+| `sanjeevrg/maxtext-tpu-pretraining:nightly` | Pre-training with nightly JAX |
+| `sanjeevrg/maxtext-tpu-posttraining:stable` | Post-training (SFT/GRPO) with stable JAX |
+| `sanjeevrg/maxtext-tpu-posttraining:nightly` | Post-training (SFT/GRPO) with nightly JAX |
 
-## Pull
+### GPU
+
+| Image | Description |
+|-------|-------------|
+| `sanjeevrg/maxtext-gpu-pretraining:stable` | Pre-training with stable JAX |
+| `sanjeevrg/maxtext-gpu-pretraining:nightly` | Pre-training with nightly JAX |
+
+> GPU post-training is not yet supported upstream.
+
+## Quick Start
 
 ```bash
-# TPU pre-training (stable JAX)
+# TPU
 docker pull sanjeevrg/maxtext-tpu-pretraining:stable
-
-# TPU post-training (stable JAX)
 docker pull sanjeevrg/maxtext-tpu-posttraining:stable
+
+# GPU
+docker pull sanjeevrg/maxtext-gpu-pretraining:stable
 ```
 
-Each image is also tagged with date (`stable-2026-05-07`) and upstream commit SHA (`stable-abc1234`).
+Each image is also tagged by date (`stable-2026-05-07`) and upstream commit SHA (`stable-abc1234`) for pinning.
 
-## Mirror to internal registry
+## Mirror to Internal Registry
 
 ```bash
-# Using crane
+# crane (recommended)
 crane copy sanjeevrg/maxtext-tpu-pretraining:stable \
-  your-registry.example.com/maxtext-tpu-pretraining:stable
+  your-registry.example.com/maxtext/tpu-pretraining:stable
 
-# Using skopeo
+# skopeo
 skopeo copy \
   docker://sanjeevrg/maxtext-tpu-pretraining:stable \
-  docker://your-registry.example.com/maxtext-tpu-pretraining:stable
+  docker://your-registry.example.com/maxtext/tpu-pretraining:stable
 ```
 
-## Build schedule
+Both DockerHub and GitHub Container Registry support pull-through cache.
 
-- **Weekly** (Monday 00:00 UTC) from upstream `main` branch
-- **Manual** via workflow dispatch with configurable branch/tag and JAX mode
+## Build Details
 
-## How it works
-
-The GitHub Actions workflow clones [AI-hypercomputer/maxtext](https://github.com/AI-hypercomputer/maxtext) at build time and uses the upstream Dockerfiles directly. No fork or file copying required - images always reflect the latest upstream code.
+- **Schedule**: Weekly (Monday 00:00 UTC) from upstream `main`
+- **Manual**: Workflow dispatch with configurable branch/tag and JAX mode (stable/nightly)
+- **Source**: Clones [AI-hypercomputer/maxtext](https://github.com/AI-hypercomputer/maxtext) at build time. No fork required.
+- **GPU patch**: Applies a fix for the upstream Ubuntu 22.04/24.04 NVIDIA repo mismatch ([details](https://github.com/AI-hypercomputer/maxtext/blob/main/src/dependencies/dockerfiles/maxtext_gpu_dependencies.Dockerfile#L11))
