@@ -1,0 +1,112 @@
+# MaxText TPU Post-Training (SFT) JobSet - Ironwood 4x4x8 (128 chips, 32 VMs)
+#
+# Usage:
+#   export WORKLOAD_NAME=maxtext-sft-$(date +%s)
+#   export BASE_OUTPUT_DIR=gs://your-bucket/output
+#   export LOAD_PARAMETERS_PATH=gs://your-bucket/pretrained-checkpoint
+#   envsubst < tpu-posttraining-jobset.yaml | kubectl apply -f -
+
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: ${WORKLOAD_NAME}
+  annotations:
+    alpha.jobset.sigs.k8s.io/exclusive-topology: cloud.google.com/gke-nodepool
+spec:
+  ttlSecondsAfterFinished: 43200
+  failurePolicy:
+    rules:
+      - action: FailJobSet
+        onJobFailureReasons:
+          - PodFailurePolicy
+    maxRestarts: 0
+  replicatedJobs:
+    - name: slice-job
+      replicas: 1
+      template:
+        spec:
+          parallelism: 32   # 128 chips / 4 chips-per-VM = 32 VMs
+          completions: 32
+          backoffLimit: 0
+          podFailurePolicy:
+            rules:
+              - action: FailJob
+                onPodConditions: []
+                onExitCodes:
+                  containerName: jax-tpu
+                  operator: NotIn
+                  values: [0, 42]
+          template:
+            spec:
+              restartPolicy: Never
+              hostNetwork: true
+              dnsPolicy: ClusterFirstWithHostNet
+              nodeSelector:
+                cloud.google.com/gke-tpu-accelerator: tpu7x
+                cloud.google.com/gke-tpu-topology: 4x4x8
+              containers:
+                - name: jax-tpu
+                  image: sanjeevrg/maxtext-tpu-posttraining:stable
+                  imagePullPolicy: Always
+                  ports:
+                    - containerPort: 8471
+                    - containerPort: 8080
+                  securityContext:
+                    privileged: true
+                  env:
+                    - name: ENABLE_PATHWAYS_PERSISTENCE
+                      value: "1"
+                    - name: JAX_PLATFORMS
+                      value: "tpu,cpu"
+                    - name: ENABLE_PJRT_COMPATIBILITY
+                      value: "true"
+                    - name: TPU_STDERR_LOG_LEVEL
+                      value: "0"
+                    - name: TPU_MIN_LOG_LEVEL
+                      value: "0"
+                    - name: TF_CPP_MIN_LOG_LEVEL
+                      value: "0"
+                  command:
+                    - bash
+                    - -c
+                    - |
+                      echo "Start: $(date)"
+
+                      export LIBTPU_INIT_ARGS="--xla_enable_async_all_gather=true"
+
+                      python3 -m MaxText.trainers.post_train.sft.train_sft \
+                        MaxText/configs/base.yml \
+                        model_name=llama3.1-70b \
+                        per_device_batch_size=2.0 \
+                        max_target_length=8192 \
+                        ici_fsdp_parallelism=-1 \
+                        ici_fsdp_transpose_parallelism=1 \
+                        ici_pipeline_parallelism=1 \
+                        dcn_data_parallelism=-1 \
+                        dcn_pipeline_parallelism=1 \
+                        allow_split_physical_axes=True \
+                        attention=flash \
+                        remat_policy=full \
+                        opt_type=adamw \
+                        load_parameters_path=${LOAD_PARAMETERS_PATH} \
+                        dataset_type=synthetic \
+                        steps=100 \
+                        base_output_directory=${BASE_OUTPUT_DIR} \
+                        run_name=${WORKLOAD_NAME}
+
+                      EXIT_CODE=$?
+                      echo "End: $(date), exit=$EXIT_CODE"
+                      exit $EXIT_CODE
+                  resources:
+                    limits:
+                      google.com/tpu: 4
+                  volumeMounts:
+                    - name: dshm
+                      mountPath: /dev/shm
+              tolerations:
+                - operator: "Exists"
+                  key: google.com/tpu
+              volumes:
+                - name: dshm
+                  emptyDir:
+                    medium: Memory

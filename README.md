@@ -1,6 +1,6 @@
 # MaxText Docker Images
 
-Public Docker images for [MaxText](https://github.com/AI-hypercomputer/maxtext) training workloads on TPU and GPU.
+Public Docker images for [MaxText](https://github.com/AI-hypercomputer/maxtext) training workloads on TPU and GPU, with ready-to-use Kubernetes manifests.
 
 ## Available Images
 
@@ -33,7 +33,53 @@ docker pull sanjeevrg/maxtext-tpu-posttraining:stable
 docker pull sanjeevrg/maxtext-gpu-pretraining:stable
 ```
 
-Each image is also tagged by date (`stable-2026-05-07`) and upstream commit SHA (`stable-abc1234`) for pinning.
+Each image is also tagged by date (`stable-2026-05-08`) and upstream commit SHA (`stable-abc1234`) for pinning.
+
+## Kubernetes Manifests (Ironwood 4x4x8)
+
+Ready-to-use manifests in [`k8s/`](k8s/):
+
+| Manifest | Type | Topology | Use Case |
+|----------|------|----------|----------|
+| `tpu-pretraining-jobset.yaml` | JobSet | 4x4x8 (128 chips, 32 VMs) | Pre-training |
+| `tpu-posttraining-jobset.yaml` | JobSet | 4x4x8 (128 chips, 32 VMs) | Post-training (SFT) |
+| `tpu-inference-lws.yaml` | LeaderWorkerSet | 2x4x1 (8 chips) | Inference (vLLM) |
+
+### Deploy Pre-Training
+
+```bash
+export WORKLOAD_NAME=maxtext-pretrain-$(date +%s)
+export BASE_OUTPUT_DIR=gs://your-bucket/output
+envsubst < k8s/tpu-pretraining-jobset.yaml | kubectl apply -f -
+```
+
+### Deploy Post-Training (SFT)
+
+```bash
+export WORKLOAD_NAME=maxtext-sft-$(date +%s)
+export BASE_OUTPUT_DIR=gs://your-bucket/output
+export LOAD_PARAMETERS_PATH=gs://your-bucket/pretrained-checkpoint
+envsubst < k8s/tpu-posttraining-jobset.yaml | kubectl apply -f -
+```
+
+### Deploy Inference (vLLM)
+
+```bash
+kubectl apply -f k8s/tpu-inference-lws.yaml
+kubectl port-forward svc/maxtext-vllm-svc 8000:8000
+```
+
+### Adapting to Other Topologies
+
+| Topology | Chips | VMs (parallelism) | `google.com/tpu` per VM |
+|----------|-------|--------------------|-------------------------|
+| 2x2x1   | 4     | 1                  | 4                       |
+| 2x2x2   | 8     | 2                  | 4                       |
+| 4x4x4   | 64    | 16                 | 4                       |
+| 4x4x8   | 128   | 32                 | 4                       |
+| 4x8x8   | 256   | 64                 | 4                       |
+
+Update `parallelism`, `completions`, and `cloud.google.com/gke-tpu-topology` accordingly.
 
 ## Mirror to Internal Registry
 

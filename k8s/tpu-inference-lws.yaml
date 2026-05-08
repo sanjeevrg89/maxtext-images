@@ -1,0 +1,82 @@
+# MaxText TPU Inference with vLLM - LeaderWorkerSet
+#
+# LWS is for serving/inference, not training. Uses vLLM on TPU.
+# For smaller topologies (inference doesn't need 4x4x8).
+#
+# Usage:
+#   kubectl apply -f tpu-inference-lws.yaml
+#   kubectl port-forward svc/maxtext-vllm-svc 8000:8000
+
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: maxtext-vllm
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 1  # Leader only (single-slice inference)
+    restartPolicy: RecreateGroupOnPodRestart
+    leaderTemplate:
+      metadata:
+        labels:
+          role: leader
+      spec:
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        nodeSelector:
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-topology: 2x4x1
+        containers:
+          - name: vllm-tpu
+            image: vllm/vllm-tpu:nightly-20260428-99e0d15-fd74c90
+            imagePullPolicy: Always
+            command:
+              - python3
+              - -m
+              - vllm.entrypoints.openai.api_server
+            args:
+              - --host=0.0.0.0
+              - --port=8000
+              - --model=meta-llama/Llama-3.1-70B-Instruct
+              - --tensor-parallel-size=8
+              - --max-model-len=8192
+              - --max-num-batched-tokens=16384
+              - --async-scheduling
+              - --gpu-memory-utilization=0.86
+            env:
+              - name: HUGGING_FACE_HUB_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: hf-token
+                    key: token
+                    optional: true
+            ports:
+              - containerPort: 8000
+                name: http
+            resources:
+              limits:
+                google.com/tpu: 4
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+        tolerations:
+          - operator: "Exists"
+            key: google.com/tpu
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: maxtext-vllm-svc
+spec:
+  type: ClusterIP
+  selector:
+    leaderworkerset.sigs.k8s.io/name: maxtext-vllm
+    leaderworkerset.sigs.k8s.io/worker-index: "0"
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
